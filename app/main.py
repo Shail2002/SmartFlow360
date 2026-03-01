@@ -3,7 +3,9 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
+from pypdf import PdfReader
+from docx import Document
+from starlette.middleware.sessions import SessionMiddleware
 from sqlmodel import Session, select
 from datetime import date
 import json
@@ -24,8 +26,24 @@ from .settings import settings
 
 app = FastAPI(title="SmartFlow360", version="1.0.0")
 
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "supersecret"),
+    same_site="lax",
+    https_only=False,  # set True when you use HTTPS in production
+)
+
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+
+# ---------------------------
+# Auth helper (MUST be above protected routes)
+# ---------------------------
+def get_current_user(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated. Please login.")
+    return user
 
 @app.on_event("startup")
 def _startup():
@@ -251,6 +269,77 @@ def ask(payload: AskRequest, session: Session = Depends(get_session)):
         mode=payload.mode
     )
     return {"answer": answer}
+
+@app.post("/api/extract")
+async def extract_file(file: UploadFile = File(...)):
+    # Read file bytes
+    data = await file.read()
+    filename = file.filename or "upload"
+    ext = os.path.splitext(filename.lower())[1]
+
+    extracted = ""
+
+    # PDF
+    if ext == ".pdf":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            reader = PdfReader(tmp_path)
+            parts = []
+            for page in reader.pages:
+                txt = page.extract_text() or ""
+                if txt.strip():
+                    parts.append(txt)
+            extracted = "\n\n".join(parts).strip()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+    # DOCX
+    elif ext == ".docx":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            doc = Document(tmp_path)
+            extracted = "\n".join([p.text for p in doc.paragraphs]).strip()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+    # Plain text / JSON / CSV / MD
+    else:
+        try:
+            extracted = data.decode("utf-8")
+        except Exception:
+            extracted = data.decode("utf-8", errors="ignore")
+
+        extracted = extracted.strip()
+
+    if not extracted:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract text. If this is a scanned PDF (image), text extraction will be empty.",
+        )
+
+    # Safety: cap huge files so the AI prompt doesn't explode
+    MAX_CHARS = 20000
+    truncated = False
+    if len(extracted) > MAX_CHARS:
+        extracted = extracted[:MAX_CHARS]
+        truncated = True
+
+    return {
+        "filename": filename,
+        "chars": len(extracted),
+        "truncated": truncated,
+        "text": extracted,
+    }
 
 # ---------------------------
 # Optional: server-side transcription

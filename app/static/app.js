@@ -24,6 +24,13 @@ const api = {
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   },
+  async extractFile(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch("/api/extract", { method: "POST", body: fd });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+  },
   async analyze(interactionId) {
     const r = await fetch(`/api/interactions/${interactionId}/analyze`, {method: 'POST'});
     if (!r.ok) throw new Error(await r.text());
@@ -62,10 +69,15 @@ const accountSelect = document.getElementById('accountSelect');
 const refreshBtn = document.getElementById('refreshBtn');
 const accountMeta = document.getElementById('accountMeta');
 
+const fileUpload = document.getElementById('fileUpload');
+const extractBtn = document.getElementById('extractBtn');
+const fileStatus = document.getElementById('fileStatus');
+
 const notes = document.getElementById('notes');
 const saveInteractionBtn = document.getElementById('saveInteractionBtn');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const interactionStatus = document.getElementById('interactionStatus');
+const clearNotesBtn = document.getElementById('clearNotesBtn');
 
 const results = document.getElementById('results');
 
@@ -179,11 +191,45 @@ saveInteractionBtn.addEventListener('click', async () => {
   const inter = await api.createInteraction(state.selectedAccountId, text, source);
   state.lastInteractionId = inter.id;
   interactionStatus.textContent = `Saved interaction #${inter.id}.`;
+
+  // notes.value = '';
+  // dictationStatus.textContent = 'Ready for new notes.';
 });
 
 function isDictated(text) {
   return dictationStatus.textContent.includes('dictation') && text.length > 0;
 }
+
+extractBtn?.addEventListener('click', async () => {
+  fileStatus.textContent = '';
+  const f = fileUpload?.files?.[0];
+  if (!f) {
+    fileStatus.textContent = 'Choose a file first.';
+    return;
+  }
+
+  try {
+    fileStatus.textContent = 'Extracting…';
+    const resp = await api.extractFile(f);
+
+    notes.value = resp.text || '';
+    interactionStatus.textContent = `Loaded notes from ${resp.filename}${resp.truncated ? ' (truncated)' : ''}.`;
+    fileStatus.textContent = `Loaded ${resp.chars} characters.`;
+    notes.focus();
+  } catch (e) {
+    fileStatus.textContent = 'Error extracting file.';
+    interactionStatus.textContent = `Error: ${e.message || e}`;
+  }
+});
+
+clearNotesBtn?.addEventListener('click', () => {
+  notes.value = '';
+  if (fileUpload) fileUpload.value = '';
+  interactionStatus.textContent = '';
+  dictationStatus.textContent = 'Cleared.';
+  state.lastInteractionId = null;
+  notes.focus();
+});
 
 // Analyze
 analyzeBtn.addEventListener('click', async () => {
@@ -361,6 +407,7 @@ function setupSpeech() {
   recognition.interimResults = true;
   recognition.lang = 'en-US';
 
+  let baseText = '';
   let finalText = '';
 
   recognition.onstart = () => {
@@ -376,6 +423,7 @@ function setupSpeech() {
       if (event.results[i].isFinal) finalText += transcript + ' ';
       else interim += transcript;
     }
+    const spoken = (finalText + interim).trim();
     notes.value = (finalText + interim).trim();
   };
 
@@ -389,7 +437,13 @@ function setupSpeech() {
     dictationStatus.textContent = 'Dictation stopped.';
   };
 
-  dictateBtn.addEventListener('click', () => recognition.start());
+  dictateBtn.addEventListener('click', () => {
+  // ✅ keep whatever is already in the notes (PDF extraction / typed text)
+  baseText = notes.value.trim();
+  finalText = ''; // reset only the new dictation buffer
+  recognition.start();
+});
+
   stopDictateBtn.addEventListener('click', () => recognition.stop());
 }
 
