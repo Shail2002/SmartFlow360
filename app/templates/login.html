@@ -5,6 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SmartFlow360 - Login</title>
     <style>
+      :root {
+        /* Light Theme (Cream) - Default */
+        --bg-color: #f4f1ea;
+        --surface-color: #ffffff;
+        --text-primary: #222222;
+        --text-secondary: #666666;
+        --accent-1: #1f77b4;
+        --accent-2: #ff7f0e;
+        --accent-3: #6a3d9a;
+        --border-color: #cccccc;
+      }
+
+      /* Dark Theme triggered by JavaScript */
+      [data-theme="dark"] {
+        --bg-color: #121212;
+        --surface-color: #1e1e1e;
+        --text-primary: #e6e6e6;
+        --text-secondary: #b3b3b3;
+        --accent-1: #4dabf7;
+        --accent-2: #ffa94d;
+        --accent-3: #b197fc;
+        --border-color: #333333;
+      }
+
+      /* Toggle Slider Styles */
+      .theme-switch-wrapper {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .theme-switch {
+        display: inline-block;
+        height: 28px;
+        position: relative;
+        width: 50px;
+      }
+
+      .theme-switch input {
+        display: none;
+      }
+
+      .slider {
+        background-color: var(--border-color);
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: 0.4s;
+        border-radius: 34px;
+      }
+
+      .slider:before {
+        background-color: #ffffff;
+        bottom: 4px;
+        content: "";
+        height: 20px;
+        left: 4px;
+        position: absolute;
+        transition: 0.4s;
+        width: 20px;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: var(--accent-1);
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(22px);
+      }
+
+      /* --- Form and Layout Styles --- */
       * {
         margin: 0;
         padding: 0;
@@ -15,38 +96,44 @@
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--bg-color);
+        color: var(--text-primary);
         min-height: 100vh;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        transition:
+          background-color 0.3s,
+          color 0.3s;
       }
 
       .login-container {
-        background: white;
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
         border-radius: 12px;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         width: 100%;
         max-width: 400px;
         padding: 40px;
+        transition:
+          background-color 0.3s,
+          border-color 0.3s;
       }
 
       .logo {
         text-align: center;
         margin-bottom: 40px;
       }
-
       .logo h1 {
-        color: #333;
+        color: var(--text-primary);
         font-size: 28px;
         margin-bottom: 8px;
       }
-
       .logo p {
-        color: #666;
+        color: var(--text-secondary);
         font-size: 14px;
       }
-
       .form-group {
         margin-bottom: 20px;
       }
@@ -54,7 +141,7 @@
       label {
         display: block;
         margin-bottom: 8px;
-        color: #333;
+        color: var(--text-primary);
         font-weight: 500;
         font-size: 14px;
       }
@@ -65,25 +152,27 @@
       select {
         width: 100%;
         padding: 12px;
-        border: 2px solid #e0e0e0;
+        background: var(--bg-color);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
         border-radius: 6px;
         font-size: 14px;
-        transition: border-color 0.3s;
+        transition:
+          border-color 0.3s,
+          background-color 0.3s;
       }
 
-      input[type="text"]:focus,
-      input[type="email"]:focus,
-      input[type="password"]:focus,
+      input:focus,
       select:focus {
         outline: none;
-        border-color: #667eea;
+        border-color: var(--accent-1);
       }
 
       .form-tabs {
         display: flex;
         gap: 10px;
         margin-bottom: 30px;
-        border-bottom: 2px solid #e0e0e0;
+        border-bottom: 2px solid var(--border-color);
       }
 
       .tab-button {
@@ -92,21 +181,19 @@
         background: none;
         border: none;
         border-bottom: 3px solid transparent;
-        color: #666;
+        color: var(--text-secondary);
         font-weight: 600;
         cursor: pointer;
         transition: all 0.3s;
       }
 
       .tab-button.active {
-        color: #667eea;
-        border-bottom-color: #667eea;
+        color: var(--accent-1);
+        border-bottom-color: var(--accent-1);
       }
-
       .tab-content {
         display: none;
       }
-
       .tab-content.active {
         display: block;
       }
@@ -114,8 +201,8 @@
       button[type="submit"] {
         width: 100%;
         padding: 12px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: var(--accent-1);
+        color: #ffffff;
         border: none;
         border-radius: 6px;
         font-weight: 600;
@@ -123,14 +210,13 @@
         cursor: pointer;
         transition:
           transform 0.2s,
-          box-shadow 0.2s;
+          filter 0.2s;
       }
 
       button[type="submit"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        filter: brightness(1.1);
       }
-
       button[type="submit"]:active {
         transform: translateY(0);
       }
@@ -157,47 +243,33 @@
         display: block;
       }
 
-      .spinner {
-        display: none;
-        width: 20px;
-        height: 20px;
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #667eea;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto;
+      .footer-text {
+        margin-top: 24px;
+        color: var(
+          --text-secondary
+        ); /* Automatically adapts to dark/light mode */
+        font-size: 14px;
+        font-weight: 500;
       }
 
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      .loading button[type="submit"] {
-        color: transparent;
-      }
-
-      .loading button[type="submit"]::after {
-        content: "";
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
+      .heart {
+        color: #ff4b4b; /* A nice red that works on both cream and dark backgrounds */
+        font-size: 16px;
       }
     </style>
   </head>
   <body>
+    <div class="theme-switch-wrapper">
+      <span id="theme-text">Dark Mode</span>
+      <label class="theme-switch" for="checkbox">
+        <input type="checkbox" id="checkbox" />
+        <div class="slider round"></div>
+      </label>
+    </div>
     <div class="login-container">
       <div class="logo">
         <h1>SmartFlow360</h1>
-        <p>Mini CRM Intelligence Platform</p>
+        <p>An Accessible CRM Intelligence Platform</p>
       </div>
 
       <div class="alert" id="alert"></div>
@@ -294,7 +366,51 @@
       </div>
     </div>
 
+    <div id="register" class="tab-content">
+          </div>
+    </div> <div class="footer-text">
+      Made with <span class="heart">&hearts;</span> at Stevens
+    </div>
+
     <script>
+      const toggleSwitch = document.querySelector(
+        '.theme-switch input[type="checkbox"]',
+      );
+      const themeText = document.getElementById("theme-text"); // Grab the text element
+      const currentTheme = localStorage.getItem("theme");
+
+      // Check local storage or system preference on load
+      if (currentTheme) {
+        document.documentElement.setAttribute("data-theme", currentTheme);
+        if (currentTheme === "dark") {
+          toggleSwitch.checked = true;
+          themeText.textContent = "Light Mode"; // Set text on load
+        }
+      } else if (
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+      ) {
+        // Fallback to system preference if no manual choice is saved
+        document.documentElement.setAttribute("data-theme", "dark");
+        toggleSwitch.checked = true;
+        themeText.textContent = "Light Mode";
+      }
+
+      // Handle the toggle switch click
+      function switchTheme(e) {
+        if (e.target.checked) {
+          document.documentElement.setAttribute("data-theme", "dark");
+          localStorage.setItem("theme", "dark");
+          themeText.textContent = "Dark Mode"; // Change text to opposite
+        } else {
+          document.documentElement.setAttribute("data-theme", "light");
+          localStorage.setItem("theme", "light");
+          themeText.textContent = "Light Mode"; // Change text to opposite
+        }
+      }
+
+      toggleSwitch.addEventListener("change", switchTheme, false);
+
       function switchTab(tabName) {
         // Hide all tabs
         document.querySelectorAll(".tab-content").forEach((tab) => {
