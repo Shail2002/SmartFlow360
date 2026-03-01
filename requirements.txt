@@ -5,4 +5,5 @@ python-dotenv
 jinja2
 python-multipart
 openai
-python-docx
+passlib[argon2]
+python-jose

@@ -1,13 +1,13 @@
 from __future__ import annotations
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Cookie, Response, Form
+from .auth import hash_password, verify_password, generate_session_token, is_session_valid
+from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pypdf import PdfReader
-from docx import Document
-from starlette.middleware.sessions import SessionMiddleware
+
 from sqlmodel import Session, select
-from datetime import date
+from datetime import date, datetime, timedelta
 import json
 import tempfile
 import os
@@ -18,32 +18,20 @@ from .schemas import (
     AccountCreate, AccountOut,
     InteractionCreate, InteractionOut,
     AnalysisOut, AskRequest, AskResponse,
-    TranscribeResponse
+    TranscribeResponse, LoginRequest
 )
 from .ai import analyze_notes, answer_account_question, transcribe_audio
 from .utils.ics import make_ics
 from .settings import settings
 
-app = FastAPI(title="SmartFlow360", version="1.0.0")
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET", "supersecret"),
-    same_site="lax",
-    https_only=False,  # set True when you use HTTPS in production
-)
+app = FastAPI(title="SmartFlow360", version="1.0.0")
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
-
-# ---------------------------
-# Auth helper (MUST be above protected routes)
-# ---------------------------
-def get_current_user(request: Request):
-    user = request.session.get("user")
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated. Please login.")
-    return user
 
 @app.on_event("startup")
 def _startup():
@@ -51,6 +39,12 @@ def _startup():
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
+    """Render the main dashboard (protected)."""
+    token = request.cookies.get("session_token")
+    if not token:
+        # Redirect to login if no session
+        return RedirectResponse(url="/login")
+    
     return templates.TemplateResponse("index.html", {
         "request": request,
         "openai_ready": settings.openai_api_key_present
@@ -270,77 +264,6 @@ def ask(payload: AskRequest, session: Session = Depends(get_session)):
     )
     return {"answer": answer}
 
-@app.post("/api/extract")
-async def extract_file(file: UploadFile = File(...)):
-    # Read file bytes
-    data = await file.read()
-    filename = file.filename or "upload"
-    ext = os.path.splitext(filename.lower())[1]
-
-    extracted = ""
-
-    # PDF
-    if ext == ".pdf":
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-        try:
-            reader = PdfReader(tmp_path)
-            parts = []
-            for page in reader.pages:
-                txt = page.extract_text() or ""
-                if txt.strip():
-                    parts.append(txt)
-            extracted = "\n\n".join(parts).strip()
-        finally:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-
-    # DOCX
-    elif ext == ".docx":
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-        try:
-            doc = Document(tmp_path)
-            extracted = "\n".join([p.text for p in doc.paragraphs]).strip()
-        finally:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-
-    # Plain text / JSON / CSV / MD
-    else:
-        try:
-            extracted = data.decode("utf-8")
-        except Exception:
-            extracted = data.decode("utf-8", errors="ignore")
-
-        extracted = extracted.strip()
-
-    if not extracted:
-        raise HTTPException(
-            status_code=400,
-            detail="Could not extract text. If this is a scanned PDF (image), text extraction will be empty.",
-        )
-
-    # Safety: cap huge files so the AI prompt doesn't explode
-    MAX_CHARS = 20000
-    truncated = False
-    if len(extracted) > MAX_CHARS:
-        extracted = extracted[:MAX_CHARS]
-        truncated = True
-
-    return {
-        "filename": filename,
-        "chars": len(extracted),
-        "truncated": truncated,
-        "text": extracted,
-    }
-
 # ---------------------------
 # Optional: server-side transcription
 # ---------------------------
@@ -364,3 +287,120 @@ async def transcribe(file: UploadFile = File(...)):
             os.remove(tmp_path)
         except Exception:
             pass
+
+# ---------------------------
+# Authentication Routes
+# ---------------------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    """Render the login page."""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/api/auth/register", response_model=dict)
+def register(payload: AccountCreate, session: Session = Depends(get_session)
+):
+    """Register a new account with email and password."""
+    # Checking if email already exists
+    existing = session.exec(select(Account).where(Account.email == payload.email)).first()
+    
+    if existing:
+        raise HTTPException(400, "Email already registered")
+    
+    # Create a new account with hashed password
+    acc = Account(
+        name=payload.name,
+        email=payload.email,
+        industry=payload.industry,
+        password_hash=hash_password(payload.password),
+        is_active=True
+    )
+    session.add(acc)
+    session.commit()
+    session.refresh(acc)
+
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "email": acc.email,
+        "message": "Account created successfully. Please log in with a password."
+    }
+
+@app.post("/api/auth/login", response_model=dict)
+def login(
+    payload: LoginRequest,
+    response: Response,
+    session_dep: Session = Depends(get_session)
+):
+    """Login with email and password."""
+    email = payload.email
+    password = payload.password
+
+    if not email or not password:
+        raise HTTPException(400, "Email and password required.")
+
+    
+    # Find account by email
+    acc = session_dep.exec(
+        select(Account).where(Account.email == email)
+    ).first()
+
+    if not acc or not verify_password(password, acc.password_hash):
+        raise HTTPException(401, "Invalid email or password")
+    
+    if not acc.is_active:
+        raise HTTPException(403, "Account is inactive.")
+    
+    #Generate session token
+    token = generate_session_token()
+    acc.session_token = token
+    acc.session_expires_at = datetime.utcnow() + timedelta(days=7)
+    session_dep.add(acc)
+    session_dep.commit()
+
+    response.set_cookie(key="session_token", value=token, httponly=True)
+
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "email": acc.email,
+        "session_token": token,
+        "expires_in": 604800
+    }
+
+@app.post("/api/auth/logout", response_model=dict)
+def logout(session_token: str,
+           session_dep: Session = Depends(get_session)
+):
+    """Logout and invalidate session."""
+    acc = session_dep.exec(select(Account).where(Account.session_token ==
+                            session_token)
+                            ).first()
+    
+    if acc:
+        acc.session_token = None
+        acc.session_expires_at = None
+        session_dep.add(acc)
+        session_dep.commit()
+
+    return {"message": "Logged out successfully"}
+
+@app.get("/api/auth/verify", response_model=dict)
+def verify_session(
+    session_token: str,
+    session_dep: Session = Depends(get_session)
+):
+    """Verify if a session token is a valid."""
+    acc = session_dep.exec(
+        select(Account).where(Account.session_token == session_token)
+    ).first()
+
+    if not acc or not is_session_valid(acc.session_expires_at):
+        raise HTTPException(401, "Invalid or expired session")
+    
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "email": acc.email,
+        "is_valid": True
+    }
