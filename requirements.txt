@@ -6,3 +6,6 @@ jinja2
 python-multipart
 openai
 python-docx
+pypdf
+itsdangerous
+reportlab
