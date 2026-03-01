@@ -12,3 +12,4 @@ class Settings(BaseModel):
     transcribe_model: str = os.getenv("SMARTFLOW_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
 
 settings = Settings()
+#fajwiajd
