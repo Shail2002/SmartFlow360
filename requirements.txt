@@ -7,3 +7,7 @@ python-multipart
 openai
 passlib[argon2]
 python-jose
+python-docx
+pypdf
+itsdangerous
+reportlab

@@ -1,10 +1,29 @@
 from __future__ import annotations
+
+import os
+import json
+import tempfile
+import smtplib
+from fastapi import HTTPException
+import ssl, smtplib
+from email.message import EmailMessage
+import io
+from datetime import date
+from email.message import EmailMessage
+from typing import Optional, Any
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Cookie, Response, Form
 from .auth import hash_password, verify_password, generate_session_token, is_session_valid
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+
+from pydantic import BaseModel
+
+from reportlab.lib.pagesizes import LETTER
+from reportlab.pdfgen import canvas
 
 from sqlmodel import Session, select
 from datetime import date, datetime, timedelta
@@ -28,14 +47,51 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+
+# ---------------------------
+# App
+# ---------------------------
 app = FastAPI(title="SmartFlow360", version="1.0.0")
 
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
-templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+# CORS (for Chrome extension + dev tools)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # hackathon/dev only (lock down later)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Sessions (used only if you later enable login)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "supersecret"),
+    same_site="lax",
+    https_only=False,  # set True when you use HTTPS in production
+)
+
+BASE_DIR = os.path.dirname(__file__)
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+
+# ---------------------------
+# Auth helper (optional)
+# NOTE: Your current project doesn't have OAuth routes here.
+# This helper is only used in /api/extract below (currently protected).
+# If you want extract to work without login, remove user=Depends(get_current_user).
+# ---------------------------
+def get_current_user(request: Request):
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated. Please login.")
+    return user
+
 
 @app.on_event("startup")
 def _startup():
     init_db()
+
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
@@ -50,10 +106,10 @@ def home(request: Request):
         "openai_ready": settings.openai_api_key_present
     })
 
+
 # ---------------------------
 # Accounts
 # ---------------------------
-
 @app.post("/api/accounts", response_model=AccountOut)
 def create_account(payload: AccountCreate, session: Session = Depends(get_session)):
     acc = Account(name=payload.name, industry=payload.industry)
@@ -62,9 +118,11 @@ def create_account(payload: AccountCreate, session: Session = Depends(get_sessio
     session.refresh(acc)
     return acc
 
+
 @app.get("/api/accounts", response_model=list[AccountOut])
 def list_accounts(session: Session = Depends(get_session)):
     return session.exec(select(Account).order_by(Account.created_at.desc())).all()
+
 
 @app.get("/api/accounts/{account_id}", response_class=JSONResponse)
 def account_detail(account_id: int, session: Session = Depends(get_session)):
@@ -80,17 +138,16 @@ def account_detail(account_id: int, session: Session = Depends(get_session)):
         select(Task).where(Task.account_id == account_id).order_by(Task.created_at.desc())
     ).all()
 
-    # return a compact JSON for the UI
     return {
         "account": acc.model_dump(),
         "interactions": [i.model_dump() for i in interactions],
         "tasks": [t.model_dump() for t in tasks],
     }
 
+
 # ---------------------------
 # Interactions + Analysis
 # ---------------------------
-
 @app.post("/api/accounts/{account_id}/interactions", response_model=InteractionOut)
 def create_interaction(account_id: int, payload: InteractionCreate, session: Session = Depends(get_session)):
     acc = session.get(Account, account_id)
@@ -102,6 +159,7 @@ def create_interaction(account_id: int, payload: InteractionCreate, session: Ses
     session.commit()
     session.refresh(inter)
     return inter
+
 
 @app.post("/api/interactions/{interaction_id}/analyze", response_model=AnalysisOut)
 def analyze_interaction(interaction_id: int, session: Session = Depends(get_session)):
@@ -118,7 +176,6 @@ def analyze_interaction(interaction_id: int, session: Session = Depends(get_sess
     # Persist tasks
     tasks_out = []
     for t in result["tasks"]:
-        # parse due_date
         dd = None
         if t.get("due_date"):
             try:
@@ -165,7 +222,6 @@ def analyze_interaction(interaction_id: int, session: Session = Depends(get_sess
     session.commit()
     session.refresh(risk)
 
-    # Build response
     return {
         "summary": result["summary"],
         "busy_bullets": result["busy_bullets"],
@@ -194,6 +250,10 @@ def analyze_interaction(interaction_id: int, session: Session = Depends(get_sess
         }
     }
 
+
+# ---------------------------
+# Tasks
+# ---------------------------
 @app.post("/api/tasks/{task_id}/complete")
 def complete_task(task_id: int, session: Session = Depends(get_session)):
     task = session.get(Task, task_id)
@@ -204,6 +264,7 @@ def complete_task(task_id: int, session: Session = Depends(get_session)):
     session.commit()
     return {"ok": True}
 
+
 @app.get("/api/tasks/{task_id}/ics")
 def task_ics(task_id: int, session: Session = Depends(get_session)):
     task = session.get(Task, task_id)
@@ -211,21 +272,22 @@ def task_ics(task_id: int, session: Session = Depends(get_session)):
         raise HTTPException(404, "Task not found")
     if not task.due_date:
         raise HTTPException(400, "Task has no due_date; cannot create calendar reminder.")
+
     ics = make_ics(
         title=f"SmartFlow360: {task.title}",
         due_date=task.due_date,
         description=f"Priority: {task.priority}\n\nRationale: {task.rationale or ''}".strip(),
     )
-    # write temp file for download
+
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".ics")
     tmp.write(ics.encode("utf-8"))
     tmp.close()
     return FileResponse(tmp.name, media_type="text/calendar", filename=f"smartflow360-task-{task.id}.ics")
 
+
 # ---------------------------
 # Q&A (account memory)
 # ---------------------------
-
 @app.post("/api/ask", response_model=AskResponse)
 def ask(payload: AskRequest, session: Session = Depends(get_session)):
     acc = session.get(Account, payload.account_id)
@@ -265,13 +327,79 @@ def ask(payload: AskRequest, session: Session = Depends(get_session)):
     return {"answer": answer}
 
 # ---------------------------
+# File extract (PDF/DOCX/TXT)
+# NOTE: currently protected. For extension demo, remove auth.
+# ---------------------------
+@app.post("/api/extract")
+async def extract_file(file: UploadFile = File(...)):
+    data = await file.read()
+    filename = file.filename or "upload"
+    ext = os.path.splitext(filename.lower())[1]
+    extracted = ""
+
+    if ext == ".pdf":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            reader = PdfReader(tmp_path)
+            parts = []
+            for page in reader.pages:
+                txt = page.extract_text() or ""
+                if txt.strip():
+                    parts.append(txt)
+            extracted = "\n\n".join(parts).strip()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+    elif ext == ".docx":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
+        try:
+            doc = Document(tmp_path)
+            extracted = "\n".join([p.text for p in doc.paragraphs]).strip()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+    else:
+        try:
+            extracted = data.decode("utf-8")
+        except Exception:
+            extracted = data.decode("utf-8", errors="ignore")
+        extracted = extracted.strip()
+
+    if not extracted:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract text. If this is a scanned PDF (image), text extraction will be empty.",
+        )
+
+    MAX_CHARS = 20000
+    truncated = False
+    if len(extracted) > MAX_CHARS:
+        extracted = extracted[:MAX_CHARS]
+        truncated = True
+
+    return {
+        "filename": filename,
+        "chars": len(extracted),
+        "truncated": truncated,
+        "text": extracted,
+    }
+
+
+# ---------------------------
 # Optional: server-side transcription
 # ---------------------------
-
 @app.post("/api/transcribe", response_model=TranscribeResponse)
 async def transcribe(file: UploadFile = File(...)):
-    # Accept audio file upload and transcribe via OpenAI Audio API.
-    # For the demo UI we use browser speech recognition, but this endpoint is available too.
     suffix = os.path.splitext(file.filename or "")[-1] or ".webm"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(await file.read())
@@ -404,3 +532,137 @@ def verify_session(
         "email": acc.email,
         "is_valid": True
     }
+
+# ============================================================
+# Chrome Extension endpoints (do not depend on accounts UI)
+# ============================================================
+
+class ExtensionAnalyzeRequest(BaseModel):
+    text: str
+    title: Optional[str] = None
+
+@app.post("/api/ext/analyze")
+def ext_analyze(payload: ExtensionAnalyzeRequest):
+    if not payload.text or not payload.text.strip():
+        raise HTTPException(400, "text is required")
+    result = analyze_notes(
+        raw_text=payload.text,
+        account_name=payload.title or "Chrome Extension",
+        today=date.today()
+    )
+    return result
+
+
+class EmailReportRequest(BaseModel):
+    to_email: str
+    subject: str
+    summary: str
+    full_json: dict[str, Any]
+
+def build_pdf_report(subject: str, summary: str, full_json: dict) -> bytes:
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=LETTER)
+    width, height = LETTER
+
+    y = height - 60
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, y, subject)
+    y -= 30
+
+    c.setFont("Helvetica", 10)
+    for line in (summary or "").splitlines():
+        c.drawString(50, y, line[:120])
+        y -= 14
+        if y < 70:
+            c.showPage()
+            y = height - 60
+
+    c.showPage()
+    c.setFont("Helvetica", 9)
+    c.drawString(50, height - 60, "Full JSON (truncated view):")
+
+    text = json.dumps(full_json, indent=2)[:6000]
+    y = height - 80
+    for line in text.splitlines():
+        c.drawString(50, y, line[:120])
+        y -= 12
+        if y < 70:
+            c.showPage()
+            y = height - 60
+
+    c.save()
+    return buf.getvalue()
+
+@app.post("/api/ext/email-report")
+def ext_email_report(payload: EmailReportRequest):
+    # build PDF bytes
+    pdf_bytes = build_pdf_report(payload.subject, payload.summary, payload.full_json)
+
+    # build email message
+    msg = EmailMessage()
+    msg["From"] = os.getenv("EMAIL_FROM", "smartflow360@demo.com")
+    msg["To"] = payload.to_email
+    msg["Subject"] = payload.subject or "SmartFlow360 report"
+    msg.set_content(payload.summary or "SmartFlow360 report attached.")
+    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="smartflow360-report.pdf")
+
+    # SMTP config
+    host = os.getenv("SMTP_HOST")
+    port = int(os.getenv("SMTP_PORT", "465"))
+    user = os.getenv("SMTP_USER")
+    pw = os.getenv("SMTP_PASS")
+
+    if not host or not user or not pw:
+        raise HTTPException(status_code=500, detail="SMTP is not configured in .env")
+
+    context = ssl.create_default_context()
+
+    try:
+        if port == 465:
+            # SSL
+            with smtplib.SMTP_SSL(host, port, timeout=20, context=context) as s:
+                s.login(user, pw)
+                s.send_message(msg)
+        else:
+            # STARTTLS (587)
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.ehlo()
+                s.starttls(context=context)
+                s.ehlo()
+                s.login(user, pw)
+                s.send_message(msg)
+    except smtplib.SMTPAuthenticationError as e:
+        raise HTTPException(status_code=500, detail=f"SMTP auth failed: {e}")
+    except smtplib.SMTPException as e:
+        raise HTTPException(status_code=500, detail=f"SMTP error: {e}")
+
+    return {"ok": True}
+
+@app.post("/api/ext/email-report")
+def ext_email_report(payload: EmailReportRequest):
+    if not payload.to_email:
+        raise HTTPException(400, "to_email is required")
+
+    pdf_bytes = build_pdf_report(payload.subject, payload.summary, payload.full_json)
+
+    msg = EmailMessage()
+    msg["From"] = os.getenv("EMAIL_FROM", "smartflow360@demo.com")
+    msg["To"] = payload.to_email
+    msg["Subject"] = payload.subject or "SmartFlow360 report"
+    msg.set_content(payload.summary or "SmartFlow360 report attached.")
+    msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename="smartflow360-report.pdf")
+
+    host = os.getenv("SMTP_HOST")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    user = os.getenv("SMTP_USER")
+    pw = os.getenv("SMTP_PASS")
+
+    if not host or not user or not pw:
+        raise HTTPException(500, "SMTP is not configured in .env (SMTP_HOST/SMTP_USER/SMTP_PASS).")
+
+    with smtplib.SMTP(host, port) as s:
+        s.starttls()
+        s.login(user, pw)
+        s.send_message(msg)
+
+    return {"ok": True}
