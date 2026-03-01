@@ -1,13 +1,23 @@
 from __future__ import annotations
 from typing import Optional
 from datetime import datetime, date
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Column, String
+from datetime import datetime
+from typing import Optional
+import secrets
 
 class Account(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    industry: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    name: str = Field(index=True)
+    email: str = Field(index=True, unique=True)
+    password_hash: str
+    is_active: bool = Field(default=True)
+    industry: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    session_token: Optional[str] = Field(default=None, nullable=True)
+    session_expires_at: Optional[datetime] = Field(default=None, nullable=True)
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -1,153 +1,268 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <link rel="icon" href="/static/favicon.ico">
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SmartFlow360</title>
-  <link rel="stylesheet" href="/static/styles.css" />
-</head>
-<body>
-  <a class="skip-link" href="#main">Skip to main content</a>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/static/favicon.ico" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SmartFlow360</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
 
-  <header class="header" role="banner">
-    <div class="brand" aria-label="SmartFlow360">
-      <div class="logo" aria-hidden="true">SF</div>
-      <div>
-        <h1>SmartFlow360</h1>
-        <p class="tagline">Accessibility-first AI follow-ups for sales</p>
-      </div>
-    </div>
-
-    <div class="toggles" role="group" aria-label="Accessibility toggles">
-      <button id="contrastBtn" class="btn" type="button" aria-pressed="false" aria-label="Toggle high contrast">
-        High contrast
-      </button>
-      <button id="dyslexiaBtn" class="btn" type="button" aria-pressed="false" aria-label="Toggle dyslexia-friendly reading mode">
-        Dyslexia mode
-      </button>
-      <button id="busyBtn" class="btn" type="button" aria-pressed="false" aria-label="Toggle explain like I'm busy mode">
-        Busy mode
-      </button>
-    </div>
-  </header>
-
-  <main id="main" class="container" role="main" tabindex="-1">
-    <section class="card" aria-labelledby="statusTitle">
-      <h2 id="statusTitle">Status</h2>
-      <p>
-        AI configured:
-        <strong class="{{ 'ok' if openai_ready else 'warn' }}">
-          {{ 'Yes' if openai_ready else 'No (set OPENAI_API_KEY in .env)' }}
-        </strong>
-      </p>
-      <p class="small">
-        Tip: Voice dictation uses your browser (Chrome) and doesn't require server-side audio upload.
-      </p>
-    </section>
-
-    <section class="grid">
-      <section class="card" aria-labelledby="accountsTitle">
-        <h2 id="accountsTitle">Accounts</h2>
-
-        <form id="accountForm" class="form" aria-label="Create account">
-          <label>
-            Account name
-            <input id="accountName" type="text" required placeholder="e.g., Acme Corp" />
-          </label>
-          <label>
-            Industry (optional)
-            <input id="accountIndustry" type="text" placeholder="e.g., Payroll / HR" />
-          </label>
-          <button class="btn primary" type="submit">Create account</button>
-        </form>
-
-        <div class="row">
-          <label for="accountSelect" class="sr-only">Select account</label>
-          <select id="accountSelect" aria-label="Select account"></select>
-          <button id="refreshBtn" class="btn" type="button">Refresh</button>
+    <header class="header" role="banner">
+      <div class="brand" aria-label="SmartFlow360">
+        <div class="logo" aria-hidden="true">SF</div>
+        <div>
+          <h1>SmartFlow360</h1>
+          <p class="tagline">Accessibility-first AI follow-ups for sales</p>
         </div>
-
-        <div id="accountMeta" class="small" aria-live="polite"></div>
-      </section>
-
-      <section class="card" aria-labelledby="notesTitle">
-        <h2 id="notesTitle">Notes / Voice transcript</h2>
-
-        <div class="row">
-          <button id="dictateBtn" class="btn" type="button" aria-label="Start voice dictation">
-            Start dictation
-          </button>
-          <button id="stopDictateBtn" class="btn" type="button" aria-label="Stop voice dictation" disabled>
-            Stop
-          </button>
-          <div class="row" style="gap: 10px; align-items: center; margin-top: 10px;">
-          <input id="fileUpload" type="file"
-              accept=".pdf,.docx,.txt,.md,.csv,.json"
-              aria-label="Upload a file to extract notes" />
-          <button id="extractBtn" class="btn secondary" type="button">Extract to Notes</button>
-          <span id="fileStatus" class="small" aria-live="polite"></span>
-</div>
-          <span id="dictationStatus" class="small" aria-live="polite"></span>
-        </div>
-
-        <label for="notes">
-          Paste meeting notes (or dictate)
-        </label>
-        <textarea id="notes" rows="10" placeholder="Paste messy notes here..."></textarea>
-
-        <div class="row">
-          <button id="saveInteractionBtn" class="btn primary" type="button">Save interaction</button>
-          <button id="analyzeBtn" class="btn" type="button">Analyze</button>
-          <button id="clearNotesBtn" class="btn secondary" type="button" aria-label="Clear notes">Clear</button>
-        </div>
-
-        <div id="interactionStatus" class="small" aria-live="polite"></div>
-      </section>
-    </section>
-
-    <section class="card" aria-labelledby="resultsTitle">
-      <h2 id="resultsTitle">Results</h2>
-
-      <div id="results" class="results" aria-live="polite">
-        <p class="small">Run <strong>Analyze</strong> to generate tasks, email, risk score, and busy bullets.</p>
       </div>
 
-      
-    </section>
+      <div class="toggles" role="group" aria-label="Accessibility toggles">
+        <div class="toggles" role="group" aria-label="Accessibility toggles">
+          <div class="theme-switch-wrapper">
+            <span id="theme-text">Dark Mode</span>
+            <label class="theme-switch" for="theme-checkbox">
+              <input type="checkbox" id="theme-checkbox" />
+              <div class="slider round"></div>
+            </label>
+          </div>
+        <button
+          id="contrastBtn"
+          class="btn"
+          type="button"
+          aria-pressed="false"
+          aria-label="Toggle high contrast"
+        >
+          High contrast
+        </button>
+        <button
+          id="dyslexiaBtn"
+          class="btn"
+          type="button"
+          aria-pressed="false"
+          aria-label="Toggle dyslexia-friendly reading mode"
+        >
+          Dyslexia mode
+        </button>
+        <button
+          id="busyBtn"
+          class="btn"
+          type="button"
+          aria-pressed="false"
+          aria-label="Toggle explain like I'm busy mode"
+        >
+          Busy mode
+        </button>
+      </div>
+    </header>
 
-    <section class="grid">
-      <section class="card" aria-labelledby="askTitle">
-        <h2 id="askTitle">Ask SmartFlow360</h2>
-        <label for="question">Question about this account</label>
-        <input id="question" type="text" placeholder="e.g., What did we discuss last month?" />
-        <div class="row">
-          <button id="askBtn" class="btn primary" type="button">Ask</button>
-          <select id="askMode" aria-label="Answer style">
-            <option value="normal">Normal</option>
-            <option value="busy">Busy (5 bullets)</option>
-            <option value="simple">Simple (dyslexia-friendly)</option>
-          </select>
+    <main id="main" class="container" role="main" tabindex="-1">
+      <section class="card" aria-labelledby="statusTitle">
+        <h2 id="statusTitle">Status</h2>
+        <p>
+          AI configured:
+          <strong class="{{ 'ok' if openai_ready else 'warn' }}">
+            {{ 'Yes' if openai_ready else 'No (set OPENAI_API_KEY in .env)' }}
+          </strong>
+        </p>
+        <p class="small">
+          Tip: Voice dictation uses your browser (Chrome) and doesn't require
+          server-side audio upload.
+        </p>
+      </section>
+
+      <section class="grid">
+        <section class="card" aria-labelledby="accountsTitle">
+          <h2 id="accountsTitle">Accounts</h2>
+
+          <form id="accountForm" class="form" aria-label="Create account">
+            <label>
+              Account name
+              <input
+                id="accountName"
+                type="text"
+                required
+                placeholder="e.g., Acme Corp"
+              />
+            </label>
+            <label>
+              Industry (optional)
+              <input
+                id="accountIndustry"
+                type="text"
+                placeholder="e.g., Payroll / HR"
+              />
+            </label>
+            <button class="btn primary" type="submit">Create account</button>
+          </form>
+
+          <div class="row">
+            <label for="accountSelect" class="sr-only">Select account</label>
+            <select id="accountSelect" aria-label="Select account"></select>
+            <button id="refreshBtn" class="btn" type="button">Refresh</button>
+          </div>
+
+          <div id="accountMeta" class="small" aria-live="polite"></div>
+        </section>
+
+        <section class="card" aria-labelledby="notesTitle">
+          <h2 id="notesTitle">Notes / Voice transcript</h2>
+
+          <div class="row">
+            <button
+              id="dictateBtn"
+              class="btn"
+              type="button"
+              aria-label="Start voice dictation"
+            >
+              Start dictation
+            </button>
+            <button
+              id="stopDictateBtn"
+              class="btn"
+              type="button"
+              aria-label="Stop voice dictation"
+              disabled
+            >
+              Stop
+            </button>
+            <div
+              class="row"
+              style="gap: 10px; align-items: center; margin-top: 10px"
+            >
+              <input
+                id="fileUpload"
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.csv,.json"
+                aria-label="Upload a file to extract notes"
+              />
+              <button id="extractBtn" class="btn secondary" type="button">
+                Extract to Notes
+              </button>
+              <span id="fileStatus" class="small" aria-live="polite"></span>
+            </div>
+            <span id="dictationStatus" class="small" aria-live="polite"></span>
+          </div>
+
+          <label for="notes"> Paste meeting notes (or dictate) </label>
+          <textarea
+            id="notes"
+            rows="10"
+            placeholder="Paste messy notes here..."
+          ></textarea>
+
+          <div class="row">
+            <button id="saveInteractionBtn" class="btn primary" type="button">
+              Save interaction
+            </button>
+            <button id="analyzeBtn" class="btn" type="button">Analyze</button>
+            <button
+              id="clearNotesBtn"
+              class="btn secondary"
+              type="button"
+              aria-label="Clear notes"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div id="interactionStatus" class="small" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section class="card" aria-labelledby="resultsTitle">
+        <h2 id="resultsTitle">Results</h2>
+
+        <div id="results" class="results" aria-live="polite">
+          <p class="small">
+            Run <strong>Analyze</strong> to generate tasks, email, risk score,
+            and busy bullets.
+          </p>
         </div>
-        <pre id="askAnswer" class="pre" aria-live="polite"></pre>
       </section>
 
-      <section class="card" aria-labelledby="accessibilityTitle">
-        <h2 id="accessibilityTitle">Accessibility features</h2>
-        <ul>
-          <li><strong>Keyboard-first:</strong> tab to navigate, visible focus, skip link</li>
-          <li><strong>High contrast toggle</strong></li>
-          <li><strong>Dyslexia-friendly mode:</strong> larger spacing + simpler email version</li>
-          <li><strong>Explain like I'm busy:</strong> 5 bullets + next actions</li>
-        </ul>
+      <section class="grid">
+        <section class="card" aria-labelledby="askTitle">
+          <h2 id="askTitle">Ask SmartFlow360</h2>
+          <label for="question">Question about this account</label>
+          <input
+            id="question"
+            type="text"
+            placeholder="e.g., What did we discuss last month?"
+          />
+          <div class="row">
+            <button id="askBtn" class="btn primary" type="button">Ask</button>
+            <select id="askMode" aria-label="Answer style">
+              <option value="normal">Normal</option>
+              <option value="busy">Busy (5 bullets)</option>
+              <option value="simple">Simple (dyslexia-friendly)</option>
+            </select>
+          </div>
+          <pre id="askAnswer" class="pre" aria-live="polite"></pre>
+        </section>
+
+        <section class="card" aria-labelledby="accessibilityTitle">
+          <h2 id="accessibilityTitle">Accessibility features</h2>
+          <ul>
+            <li>
+              <strong>Keyboard-first:</strong> tab to navigate, visible focus,
+              skip link
+            </li>
+            <li><strong>High contrast toggle</strong></li>
+            <li>
+              <strong>Dyslexia-friendly mode:</strong> larger spacing + simpler
+              email version
+            </li>
+            <li>
+              <strong>Explain like I'm busy:</strong> 5 bullets + next actions
+            </li>
+          </ul>
+        </section>
       </section>
-    </section>
-  </main>
+    </main>
 
-  <footer class="footer">
-    <p class="small">SmartFlow360 • Hackathon MVP</p>
-  </footer>
+    <footer class="footer">
+      <p class="small">SmartFlow360 • Hackathon MVP</p>
+    </footer>
 
-  <script src="/static/app.js"></script>
-</body>
+    <script src="/static/app.js"></script>
+
+    <script>
+    const themeToggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
+    const themeText = document.getElementById("theme-text");
+    const currentTheme = localStorage.getItem("theme");
+
+    // Check local storage or system preference on load
+    if (currentTheme) {
+      document.documentElement.setAttribute("data-theme", currentTheme);
+      if (currentTheme === "dark") {
+        themeToggleSwitch.checked = true;
+        themeText.textContent = "Light Mode";
+      }
+    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggleSwitch.checked = true;
+      themeText.textContent = "Light Mode";
+    }
+
+    // Handle the toggle switch click
+    function switchTheme(e) {
+      if (e.target.checked) {
+        document.documentElement.setAttribute("data-theme", "dark");
+        localStorage.setItem("theme", "dark");
+        themeText.textContent = "Light Mode";
+      } else {
+        document.documentElement.setAttribute("data-theme", "light");
+        localStorage.setItem("theme", "light");
+        themeText.textContent = "Dark Mode";
+      }
+    }
+
+    if (themeToggleSwitch) {
+      themeToggleSwitch.addEventListener("change", switchTheme, false);
+    }
+  </script>
+  </body>
 </html>

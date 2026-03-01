@@ -1,26 +1,41 @@
 from __future__ import annotations
 from typing import Optional, List, Literal, Dict, Any
 from datetime import date, datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 Priority = Literal["High", "Medium", "Low"]
 
 class AccountCreate(BaseModel):
-    name: str = Field(min_length=1)
-    industry: Optional[str] = None
+    name: str # = Field(min_length=1)
+    email: str
+    industry: str
+    password: str
+    #industry: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class AuthResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    session_token: str
+    expires_in: int
 
 class AccountOut(BaseModel):
-    id: int
+    id: Optional[int]
     name: str
     industry: Optional[str]
     created_at: datetime
 
 class InteractionCreate(BaseModel):
-    raw_text: str = Field(min_length=1)
-    source: Literal["notes", "voice"] = "notes"
+    raw_text: str # = Field(min_length=1)
+    # source: Literal["notes", "voice"] = "notes"
+    source: str
 
 class InteractionOut(BaseModel):
-    id: int
+    id: Optional[int]
     account_id: int
     source: str
     created_at: datetime

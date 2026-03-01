@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartFlow360 - Login</title>
+    <style>
+      :root {
+        /* Light Theme (Cream) - Default */
+        --bg-color: #f4f1ea;
+        --surface-color: #ffffff;
+        --text-primary: #222222;
+        --text-secondary: #666666;
+        --accent-1: #1f77b4;
+        --accent-2: #ff7f0e;
+        --accent-3: #6a3d9a;
+        --border-color: #cccccc;
+      }
+
+      /* Dark Theme triggered by JavaScript */
+      [data-theme="dark"] {
+        --bg-color: #121212;
+        --surface-color: #1e1e1e;
+        --text-primary: #e6e6e6;
+        --text-secondary: #b3b3b3;
+        --accent-1: #4dabf7;
+        --accent-2: #ffa94d;
+        --accent-3: #b197fc;
+        --border-color: #333333;
+      }
+
+      /* Toggle Slider Styles */
+      .theme-switch-wrapper {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .theme-switch {
+        display: inline-block;
+        height: 28px;
+        position: relative;
+        width: 50px;
+      }
+
+      .theme-switch input {
+        display: none;
+      }
+
+      .slider {
+        background-color: var(--border-color);
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: 0.4s;
+        border-radius: 34px;
+      }
+
+      .slider:before {
+        background-color: #ffffff;
+        bottom: 4px;
+        content: "";
+        height: 20px;
+        left: 4px;
+        position: absolute;
+        transition: 0.4s;
+        width: 20px;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: var(--accent-1);
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(22px);
+      }
+
+      /* --- Form and Layout Styles --- */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg-color);
+        color: var(--text-primary);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition:
+          background-color 0.3s,
+          color 0.3s;
+      }
+
+      .login-container {
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        width: 100%;
+        max-width: 400px;
+        padding: 40px;
+        transition:
+          background-color 0.3s,
+          border-color 0.3s;
+      }
+
+      .logo {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+      .logo h1 {
+        color: var(--text-primary);
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+      .logo p {
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      input[type="text"],
+      input[type="email"],
+      input[type="password"],
+      select {
+        width: 100%;
+        padding: 12px;
+        background: var(--bg-color);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 14px;
+        transition:
+          border-color 0.3s,
+          background-color 0.3s;
+      }
+
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--accent-1);
+      }
+
+      .form-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        border-bottom: 2px solid var(--border-color);
+      }
+
+      .tab-button {
+        flex: 1;
+        padding: 12px;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: var(--text-secondary);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .tab-button.active {
+        color: var(--accent-1);
+        border-bottom-color: var(--accent-1);
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+
+      button[type="submit"] {
+        width: 100%;
+        padding: 12px;
+        background: var(--accent-1);
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          filter 0.2s;
+      }
+
+      button[type="submit"]:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.1);
+      }
+      button[type="submit"]:active {
+        transform: translateY(0);
+      }
+
+      .alert {
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        font-size: 14px;
+        display: none;
+      }
+
+      .alert.error {
+        background-color: #fee;
+        color: #c00;
+        border: 1px solid #fcc;
+        display: block;
+      }
+
+      .alert.success {
+        background-color: #efe;
+        color: #060;
+        border: 1px solid #cfc;
+        display: block;
+      }
+
+      .footer-text {
+        margin-top: 24px;
+        color: var(
+          --text-secondary
+        ); /* Automatically adapts to dark/light mode */
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .heart {
+        color: #ff4b4b; /* A nice red that works on both cream and dark backgrounds */
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="theme-switch-wrapper">
+      <span id="theme-text">Dark Mode</span>
+      <label class="theme-switch" for="checkbox">
+        <input type="checkbox" id="checkbox" />
+        <div class="slider round"></div>
+      </label>
+    </div>
+    <div class="login-container">
+      <div class="logo">
+        <h1>SmartFlow360</h1>
+        <p>An Accessible CRM Intelligence Platform</p>
+      </div>
+
+      <div class="alert" id="alert"></div>
+
+      <div class="form-tabs">
+        <button
+          type="button"
+          class="tab-button active"
+          onclick="switchTab('login')"
+        >
+          Login
+        </button>
+        <button
+          type="button"
+          class="tab-button"
+          onclick="switchTab('register')"
+        >
+          Sign Up
+        </button>
+      </div>
+
+      <!-- LOGIN TAB -->
+      <div id="login" class="tab-content active">
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" name="email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input
+              type="password"
+              id="login-password"
+              name="password"
+              required
+            />
+          </div>
+
+          <button type="submit">Login</button>
+        </form>
+      </div>
+
+      <!-- REGISTER TAB -->
+      <div id="register" class="tab-content">
+        <form onsubmit="handleRegister(event)">
+          <div class="form-group">
+            <label for="register-name">Full Name</label>
+            <input type="text" id="register-name" name="name" required />
+          </div>
+
+          <div class="form-group">
+            <label for="register-email">Email</label>
+            <input type="email" id="register-email" name="email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="register-industry">Industry</label>
+            <select id="register-industry" name="industry" required>
+              <option value="">Select an industry...</option>
+              <option value="Technology">Technology</option>
+              <option value="Finance">Finance</option>
+              <option value="Healthcare">Healthcare</option>
+              <option value="Retail">Retail</option>
+              <option value="Manufacturing">Manufacturing</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="register-password">Password</label>
+            <input
+              type="password"
+              id="register-password"
+              name="password"
+              required
+              minlength="8"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="register-confirm">Confirm Password</label>
+            <input
+              type="password"
+              id="register-confirm"
+              name="confirm"
+              required
+              minlength="8"
+            />
+          </div>
+
+          <button type="submit">Create Account</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="register" class="tab-content">
+          </div>
+    </div> <div class="footer-text">
+      Made with <span class="heart">&hearts;</span> at Stevens
+    </div>
+
+    <script>
+      const toggleSwitch = document.querySelector(
+        '.theme-switch input[type="checkbox"]',
+      );
+      const themeText = document.getElementById("theme-text"); // Grab the text element
+      const currentTheme = localStorage.getItem("theme");
+
+      // Check local storage or system preference on load
+      if (currentTheme) {
+        document.documentElement.setAttribute("data-theme", currentTheme);
+        if (currentTheme === "dark") {
+          toggleSwitch.checked = true;
+          themeText.textContent = "Light Mode"; // Set text on load
+        }
+      } else if (
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+      ) {
+        // Fallback to system preference if no manual choice is saved
+        document.documentElement.setAttribute("data-theme", "dark");
+        toggleSwitch.checked = true;
+        themeText.textContent = "Light Mode";
+      }
+
+      // Handle the toggle switch click
+      function switchTheme(e) {
+        if (e.target.checked) {
+          document.documentElement.setAttribute("data-theme", "dark");
+          localStorage.setItem("theme", "dark");
+          themeText.textContent = "Dark Mode"; // Change text to opposite
+        } else {
+          document.documentElement.setAttribute("data-theme", "light");
+          localStorage.setItem("theme", "light");
+          themeText.textContent = "Light Mode"; // Change text to opposite
+        }
+      }
+
+      toggleSwitch.addEventListener("change", switchTheme, false);
+
+      function switchTab(tabName) {
+        // Hide all tabs
+        document.querySelectorAll(".tab-content").forEach((tab) => {
+          tab.classList.remove("active");
+        });
+        document.querySelectorAll(".tab-button").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+
+        // Show selected tab
+        document.getElementById(tabName).classList.add("active");
+        event.target.classList.add("active");
+
+        // Clear alerts
+        clearAlert();
+      }
+
+      function showAlert(message, type = "error") {
+        const alertDiv = document.getElementById("alert");
+        alertDiv.textContent = message;
+        alertDiv.className = `alert ${type}`;
+      }
+
+      function clearAlert() {
+        const alertDiv = document.getElementById("alert");
+        alertDiv.className = "alert";
+        alertDiv.textContent = "";
+      }
+
+      async function handleLogin(event) {
+        event.preventDefault();
+        clearAlert();
+
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json", // ← KEY: Send JSON
+            },
+            body: JSON.stringify({
+              // ← KEY: Use JSON.stringify
+              email,
+              password,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.detail || "Login failed");
+          }
+
+          // Store session token in localStorage
+          localStorage.setItem("session_token", data.session_token);
+          localStorage.setItem("user_id", data.id);
+          localStorage.setItem("user_name", data.name);
+
+          showAlert(`Welcome back, ${data.name}!`, "success");
+
+          // Redirect to dashboard after 1 second
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 1000);
+        } catch (error) {
+          console.error("Login error:", error);
+          showAlert(error.message, "error");
+        }
+      }
+
+      async function handleRegister(event) {
+        event.preventDefault();
+        clearAlert();
+
+        const name = document.getElementById("register-name").value;
+        const email = document.getElementById("register-email").value;
+        const industry = document.getElementById("register-industry").value;
+        const password = document.getElementById("register-password").value;
+        const confirm = document.getElementById("register-confirm").value;
+
+        // Validate passwords match
+        if (password !== confirm) {
+          showAlert("Passwords do not match", "error");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name,
+              email,
+              industry,
+              password,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.detail || "Registration failed");
+          }
+
+          showAlert("Account created! Switching to login...", "success");
+
+          // Switch to login tab
+          setTimeout(() => {
+            document.querySelector("[onclick=\"switchTab('login')\"]").click();
+            document.getElementById("login-email").value = email;
+            document.getElementById("login-password").focus();
+          }, 1500);
+        } catch (error) {
+          showAlert(error.message, "error");
+        }
+      }
+    </script>
+  </body>
+</html>

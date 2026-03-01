@@ -12,11 +12,13 @@ from datetime import date
 from email.message import EmailMessage
 from typing import Optional, Any
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Cookie, Response, Form
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+
+from .auth import hash_password, verify_password, generate_session_token, is_session_valid
 
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -26,6 +28,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 
 from sqlmodel import Session, select
+from datetime import date, datetime, timedelta
 
 from .db import init_db, get_session
 from .models import Account, Interaction, Task, EmailDraft, RiskAssessment
@@ -33,11 +36,15 @@ from .schemas import (
     AccountCreate, AccountOut,
     InteractionCreate, InteractionOut,
     AnalysisOut, AskRequest, AskResponse,
-    TranscribeResponse
+    TranscribeResponse, LoginRequest
 )
 from .ai import analyze_notes, answer_account_question, transcribe_audio
 from .utils.ics import make_ics
 from .settings import settings
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 # ---------------------------
@@ -87,6 +94,12 @@ def _startup():
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
+    """Render the main dashboard (protected)."""
+    token = request.cookies.get("session_token")
+    if not token:
+        # Redirect to login if no session
+        return RedirectResponse(url="/login")
+    
     return templates.TemplateResponse("index.html", {
         "request": request,
         "openai_ready": settings.openai_api_key_present
@@ -402,6 +415,122 @@ async def transcribe(file: UploadFile = File(...)):
         except Exception:
             pass
 
+# ---------------------------
+# Authentication Routes
+# ---------------------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    """Render the login page."""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/api/auth/register", response_model=dict)
+def register(payload: AccountCreate, session: Session = Depends(get_session)
+):
+    """Register a new account with email and password."""
+    # Checking if email already exists
+    existing = session.exec(select(Account).where(Account.email == payload.email)).first()
+    
+    if existing:
+        raise HTTPException(400, "Email already registered")
+    
+    # Create a new account with hashed password
+    acc = Account(
+        name=payload.name,
+        email=payload.email,
+        industry=payload.industry,
+        password_hash=hash_password(payload.password),
+        is_active=True
+    )
+    session.add(acc)
+    session.commit()
+    session.refresh(acc)
+
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "email": acc.email,
+        "message": "Account created successfully. Please log in with a password."
+    }
+
+@app.post("/api/auth/login", response_model=dict)
+def login(
+    payload: LoginRequest,
+    response: Response,
+    session_dep: Session = Depends(get_session)
+):
+    """Login with email and password."""
+    email = payload.email
+    password = payload.password
+
+    if not email or not password:
+        raise HTTPException(400, "Email and password required.")
+
+    
+    # Find account by email
+    acc = session_dep.exec(
+        select(Account).where(Account.email == email)
+    ).first()
+
+    if not acc or not verify_password(password, acc.password_hash):
+        raise HTTPException(401, "Invalid email or password")
+    
+    if not acc.is_active:
+        raise HTTPException(403, "Account is inactive.")
+    
+    #Generate session token
+    token = generate_session_token()
+    acc.session_token = token
+    acc.session_expires_at = datetime.utcnow() + timedelta(days=7)
+    session_dep.add(acc)
+    session_dep.commit()
+
+    response.set_cookie(key="session_token", value=token, httponly=True)
+
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "email": acc.email,
+        "session_token": token,
+        "expires_in": 604800
+    }
+
+@app.post("/api/auth/logout", response_model=dict)
+def logout(session_token: str,
+           session_dep: Session = Depends(get_session)
+):
+    """Logout and invalidate session."""
+    acc = session_dep.exec(select(Account).where(Account.session_token ==
+                            session_token)
+                            ).first()
+    
+    if acc:
+        acc.session_token = None
+        acc.session_expires_at = None
+        session_dep.add(acc)
+        session_dep.commit()
+
+    return {"message": "Logged out successfully"}
+
+@app.get("/api/auth/verify", response_model=dict)
+def verify_session(
+    session_token: str,
+    session_dep: Session = Depends(get_session)
+):
+    """Verify if a session token is a valid."""
+    acc = session_dep.exec(
+        select(Account).where(Account.session_token == session_token)
+    ).first()
+
+    if not acc or not is_session_valid(acc.session_expires_at):
+        raise HTTPException(401, "Invalid or expired session")
+    
+    return {
+        "id": acc.id,
+        "name": acc.name,
+        "email": acc.email,
+        "is_valid": True
+    }
 
 # ============================================================
 # Chrome Extension endpoints (do not depend on accounts UI)
