@@ -13,23 +13,22 @@ from email.message import EmailMessage
 from typing import Optional, Any
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Cookie, Response, Form
-from .auth import hash_password, verify_password, generate_session_token, is_session_valid
-from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
-from pydantic import BaseModel
+from .auth import hash_password, verify_password, generate_session_token, is_session_valid
 
+from pydantic import BaseModel
+from pypdf import PdfReader
+from docx import Document
+from starlette.middleware.sessions import SessionMiddleware
 from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 
 from sqlmodel import Session, select
 from datetime import date, datetime, timedelta
-import json
-import tempfile
-import os
 
 from .db import init_db, get_session
 from .models import Account, Interaction, Task, EmailDraft, RiskAssessment
